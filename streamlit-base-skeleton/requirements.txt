@@ -1,0 +1,24 @@
+# --- Núcleo de la aplicación ---
+streamlit>=1.40
+pandas>=2.0
+
+# --- Datos de mercado ---
+yfinance>=0.2.40
+
+# --- Indicadores técnicos ---
+# Nota: usamos 'ta' (estable) en lugar de 'pandas-ta', que ha dado problemas
+# de compatibilidad con versiones recientes de pandas/numpy. Ver CLAUDE.md.
+ta>=0.11
+
+# --- Visualización ---
+plotly>=5.20
+
+# --- Reporte PDF ---
+reportlab>=4.0
+
+# --- Capa LLM (chatbot) — se usará en la última fase ---
+anthropic>=0.40
+
+# --- Pruebas ---
+pytest>=8.0
+pytest-cov>=5.0
