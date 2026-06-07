@@ -1,0 +1,24 @@
+# Entorno virtual
+venv/
+.venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Claves y secretos (NUNCA subir la API key del LLM)
+.env
+*.key
+
+# Editores
+.vscode/
+.idea/
+
+# Salidas generadas
+reports/output/
+*.pdf
