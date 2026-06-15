@@ -7,11 +7,12 @@ yfinance>=0.2.40
 
 # --- Indicadores técnicos ---
 # Nota: usamos 'ta' (estable) en lugar de 'pandas-ta', que ha dado problemas
-# de compatibilidad con versiones recientes de pandas/numpy. Ver CLAUDE.md.
+# de compatibilidad con versiones recientes de pandas/numpy.
 ta>=0.11
 
 # --- Visualización ---
 plotly>=5.20
+matplotlib>=3.7
 
 # --- Reporte PDF ---
 reportlab>=4.0
