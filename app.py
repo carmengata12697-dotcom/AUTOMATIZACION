@@ -18,7 +18,14 @@ st.caption("Análisis técnico, fundamental y recomendación automatizada")
 # --- Sidebar ---
 with st.sidebar:
     st.header("⚙️ Configuración")
-    ticker = st.text_input("Ticker", value="AAPL", help="Ej: AAPL, GOOGL, ECOPETROL.CL").strip().upper()
+
+    st.markdown("**Selecciona hasta 3 tickers:**")
+    ticker1 = st.text_input("Ticker 1", value="AAPL", help="Ej: AAPL").strip().upper()
+    ticker2 = st.text_input("Ticker 2", value="", help="Ej: GOOGL (opcional)").strip().upper()
+    ticker3 = st.text_input("Ticker 3", value="", help="Ej: MSFT (opcional)").strip().upper()
+
+    # Lista solo con los tickers que se ingresaron
+    tickers = [t for t in [ticker1, ticker2, ticker3] if t]
 
     st.divider()
     st.markdown("**Ejemplos por mercado:**")
@@ -28,14 +35,15 @@ with st.sidebar:
         "🇲🇽 México": ["WALMEX.MX"],
         "🇧🇷 Brasil": ["PETR4.SA"],
     }
-    for mercado, tickers in ejemplos.items():
-        st.caption(f"{mercado}: {', '.join(tickers)}")
+    for mercado, tks in ejemplos.items():
+        st.caption(f"{mercado}: {', '.join(tks)}")
 
     st.divider()
 
     # --- Botón descarga PDF ---
     st.markdown("### 📄 Exportar a PDF")
-    if st.button("Generar reporte PDF", use_container_width=True):
+    ticker_pdf = st.selectbox("Ticker para el reporte", tickers) if tickers else None
+    if st.button("Generar reporte PDF", use_container_width=True) and ticker_pdf:
         with st.spinner("Generando PDF…"):
             try:
                 from data_layer.yahoo_client import obtener_historico, obtener_fundamentales
@@ -44,8 +52,8 @@ with st.sidebar:
                 from domain.scoring_engine import calcular_score
                 from reports.pdf_generator import generar_reporte
 
-                precios = obtener_historico(ticker, "1y")
-                crudos = obtener_fundamentales(ticker)
+                precios = obtener_historico(ticker_pdf, "1y")
+                crudos = obtener_fundamentales(ticker_pdf)
                 fundamental = procesar_fundamentales(crudos)
 
                 def ultimo(serie):
@@ -69,7 +77,7 @@ with st.sidebar:
                 resultado = calcular_score(tecnico, fundamental)
 
                 datos_pdf = {
-                    "ticker": ticker,
+                    "ticker": ticker_pdf,
                     "nombre": fundamental.get("nombre"),
                     "sector": fundamental.get("sector"),
                     "moneda": fundamental.get("moneda"),
@@ -82,7 +90,7 @@ with st.sidebar:
                 st.download_button(
                     label="⬇️ Descargar PDF",
                     data=pdf_bytes,
-                    file_name=f"reporte_{ticker}.pdf",
+                    file_name=f"reporte_{ticker_pdf}.pdf",
                     mime="application/pdf",
                     use_container_width=True,
                 )
@@ -93,11 +101,10 @@ tab1, tab2, tab3, tab4 = st.tabs(
     ["📈 Análisis Técnico", "📊 Análisis Fundamental", "🎯 Recomendación", "💼 Cartera"]
 )
 with tab1:
-    tab_technical.render(ticker)
+    tab_technical.render(tickers)
 with tab2:
-    tab_fundamental.render(ticker)
+    tab_fundamental.render(tickers)
 with tab3:
-    tab_recommendation.render(ticker)
+    tab_recommendation.render(tickers)
 with tab4:
     tab_portfolio.render()
-

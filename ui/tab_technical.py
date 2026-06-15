@@ -17,22 +17,8 @@ from domain.technical_engine import (
 )
 
 
-def render(ticker: str) -> None:
-    st.subheader("📈 Análisis Técnico")
-
-    if not ticker:
-        st.warning("Introduce un ticker en el panel lateral.")
-        return
-
-    # --- Selector de ventana temporal ---
-    ventana_label = st.selectbox(
-        "Ventana temporal",
-        list(config.VENTANAS_TEMPORALES.keys()),
-        index=2,  # "1 año" por defecto
-        key="ventana_tecnico",
-    )
-    periodo = config.VENTANAS_TEMPORALES[ventana_label]
-
+def _render_ticker(ticker: str, periodo: str) -> None:
+    """Renderiza el análisis técnico completo para un ticker."""
     with st.spinner(f"Descargando datos de {ticker}…"):
         precios = obtener_historico(ticker, periodo)
 
@@ -45,9 +31,6 @@ def render(ticker: str) -> None:
     bollinger = calcular_bollinger(precios)
     medias = calcular_medias_moviles(precios)
 
-    # ------------------------------------------------------------------ #
-    # Gráfico principal: velas + Bollinger + medias móviles               #
-    # ------------------------------------------------------------------ #
     fig = make_subplots(
         rows=3, cols=1,
         shared_xaxes=True,
@@ -80,12 +63,10 @@ def render(ticker: str) -> None:
         fig.add_trace(go.Scatter(
             x=bollinger.index, y=bollinger["banda_alta"],
             name="Bollinger Alta", line=dict(color="rgba(100,100,255,0.4)", width=1),
-            showlegend=True,
         ), row=1, col=1)
         fig.add_trace(go.Scatter(
             x=bollinger.index, y=bollinger["media"],
             name="Bollinger Media", line=dict(color="rgba(100,100,255,0.7)", width=1, dash="dot"),
-            fill=None,
         ), row=1, col=1)
         fig.add_trace(go.Scatter(
             x=bollinger.index, y=bollinger["banda_baja"],
@@ -127,7 +108,6 @@ def render(ticker: str) -> None:
             x=rsi.index, y=rsi,
             name="RSI", line=dict(color="#9c27b0", width=1.5),
         ), row=3, col=1)
-        # Zonas sobrecompra / sobreventa
         fig.add_hrect(y0=70, y1=100, row=3, col=1,
                       fillcolor="rgba(239,83,80,0.1)", line_width=0)
         fig.add_hrect(y0=0, y1=30, row=3, col=1,
@@ -148,7 +128,7 @@ def render(ticker: str) -> None:
 
     st.plotly_chart(fig, use_container_width=True)
 
-    # --- Resumen de últimos valores ---
+    # Resumen de últimos valores
     st.markdown("#### Últimos valores")
     col1, col2, col3, col4 = st.columns(4)
     ultimo_close = precios["Close"].iloc[-1]
@@ -172,3 +152,27 @@ def render(ticker: str) -> None:
             col4.metric("SMA 200", f"{v200:.2f}", f"{diff:+.1f}%")
 
 
+def render(tickers: list) -> None:
+    st.subheader("📈 Análisis Técnico")
+
+    if not tickers:
+        st.warning("Introduce al menos un ticker en el panel lateral.")
+        return
+
+    # Selector de ventana temporal (compartido para todos)
+    ventana_label = st.selectbox(
+        "Ventana temporal",
+        list(config.VENTANAS_TEMPORALES.keys()),
+        index=2,
+        key="ventana_tecnico",
+    )
+    periodo = config.VENTANAS_TEMPORALES[ventana_label]
+
+    # Si hay más de un ticker, mostrar pestañas internas
+    if len(tickers) == 1:
+        _render_ticker(tickers[0], periodo)
+    else:
+        tabs = st.tabs([f"📊 {t}" for t in tickers])
+        for tab, ticker in zip(tabs, tickers):
+            with tab:
+                _render_ticker(ticker, periodo)

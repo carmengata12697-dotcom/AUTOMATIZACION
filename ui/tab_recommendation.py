@@ -1,7 +1,7 @@
 """Pestaña de Recomendación. Semáforo + score + desglose por indicador."""
+import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
-import pandas as pd
 
 import config
 from data_layer.yahoo_client import obtener_historico, obtener_fundamentales
@@ -11,7 +11,6 @@ from domain.scoring_engine import calcular_score
 
 
 def _ultimos_tecnicos(precios) -> dict:
-    """Extrae el último valor de cada indicador técnico."""
     if precios.empty:
         return {}
 
@@ -53,13 +52,8 @@ _NOMBRES = {
 }
 
 
-def render(ticker: str) -> None:
-    st.subheader("🎯 Recomendación")
-
-    if not ticker:
-        st.warning("Introduce un ticker en el panel lateral.")
-        return
-
+def _render_ticker(ticker: str) -> None:
+    """Renderiza la recomendación completa para un ticker."""
     with st.spinner(f"Calculando score para {ticker}…"):
         precios = obtener_historico(ticker, "1y")
         crudos = obtener_fundamentales(ticker)
@@ -72,7 +66,6 @@ def render(ticker: str) -> None:
     desglose = resultado.get("desglose", [])
     peso_evaluado = resultado.get("peso_evaluado", 0)
 
-    # --- Semáforo ---
     color_map = {"Comprar": "#26a69a", "Neutral": "#ffa726", "Evitar": "#ef5350",
                  "Datos insuficientes": "#9e9e9e"}
     emoji_map = {"Comprar": "🟢", "Neutral": "🟡", "Evitar": "🔴", "Datos insuficientes": "⚫"}
@@ -93,7 +86,6 @@ def render(ticker: str) -> None:
     )
 
     if score is not None:
-        # Gauge chart
         fig_gauge = go.Figure(go.Indicator(
             mode="gauge+number",
             value=score,
@@ -116,14 +108,13 @@ def render(ticker: str) -> None:
         ))
         fig_gauge.update_layout(height=250, margin=dict(l=20, r=20, t=40, b=20),
                                 template="plotly_dark")
-        st.plotly_chart(fig_gauge, use_container_width=True)
+        st.plotly_chart(fig_gauge, use_container_width=True, key=f"gauge_{ticker}")
 
         st.caption(f"Peso evaluado: {peso_evaluado:.0f} / 100 puntos "
                    f"({100 - peso_evaluado:.0f} puntos sin datos disponibles)")
 
     st.divider()
 
-    # --- Desglose por indicador ---
     st.markdown("#### Desglose por indicador")
     if desglose:
         filas = []
@@ -148,7 +139,6 @@ def render(ticker: str) -> None:
 
     st.divider()
 
-    # --- Gráfico de barras técnico vs fundamental ---
     if desglose:
         tecnico_pts = sum(d["peso"] for d in desglose if d["evaluado"] and d["cumplido"] and d["categoria"] == "Tecnico")
         tecnico_total = sum(d["peso"] for d in desglose if d["evaluado"] and d["categoria"] == "Tecnico")
@@ -167,7 +157,22 @@ def render(ticker: str) -> None:
             barmode="overlay", height=280, title="Puntos por categoría",
             template="plotly_dark", margin=dict(l=20, r=20, t=40, b=20),
         )
-        st.plotly_chart(fig_bar, use_container_width=True)
+        st.plotly_chart(fig_bar, use_container_width=True, key=f"bar_{ticker}")
 
-    # --- Descargo ---
     st.info(f"⚠️ {resultado.get('descargo', config.DESCARGO_RESPONSABILIDAD)}")
+
+
+def render(tickers: list) -> None:
+    st.subheader("🎯 Recomendación")
+
+    if not tickers:
+        st.warning("Introduce al menos un ticker en el panel lateral.")
+        return
+
+    if len(tickers) == 1:
+        _render_ticker(tickers[0])
+    else:
+        tabs = st.tabs([f"🎯 {t}" for t in tickers])
+        for tab, ticker in zip(tabs, tickers):
+            with tab:
+                _render_ticker(ticker)
