@@ -16,6 +16,7 @@ matplotlib>=3.7
 
 # --- Reporte PDF ---
 reportlab>=4.0
+pillow>=10.0
 
 # --- Capa LLM (chatbot) — se usará en la última fase ---
 anthropic>=0.40
