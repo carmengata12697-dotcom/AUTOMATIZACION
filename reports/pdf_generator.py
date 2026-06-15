@@ -1,12 +1,13 @@
-"""Generación del reporte PDF con reportlab.
-
-Toma los resultados YA calculados (scoring, fundamentales, últimos técnicos)
-y arma el PDF. No calcula nada; solo maqueta.
-"""
+"""Generación del reporte PDF con reportlab y matplotlib."""
 from __future__ import annotations
 
 import io
 from datetime import date
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -14,12 +15,11 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-    HRFlowable, KeepTogether,
+    HRFlowable, Image,
 )
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.enums import TA_CENTER
 
 import config
-
 
 # ------------------------------------------------------------------ #
 # Paleta                                                              #
@@ -30,7 +30,6 @@ ROJO = colors.HexColor("#ef5350")
 GRIS_CLARO = colors.HexColor("#f5f5f5")
 GRIS_BORDE = colors.HexColor("#dddddd")
 AZUL_OSCURO = colors.HexColor("#1a237e")
-NEGRO = colors.black
 
 
 def _color_recomendacion(rec: str):
@@ -44,7 +43,7 @@ def _emoji_estado(evaluado: bool, cumplido: bool) -> str:
 
 
 _NOMBRES_INDICADORES = {
-    "rsi": "RSI (30–70)",
+    "rsi": "RSI (30-70)",
     "macd": "MACD alcista",
     "precio_sobre_sma200": "Precio > SMA 200",
     "bollinger_banda_baja": "Precio en banda baja Bollinger",
@@ -57,7 +56,7 @@ _NOMBRES_INDICADORES = {
 
 def _fmt(valor, tipo="num", decimales=2, sufijo=""):
     if valor is None:
-        return "—"
+        return "-"
     if tipo == "pct":
         return f"{valor * 100:.{decimales}f}%"
     if tipo == "millones":
@@ -66,30 +65,199 @@ def _fmt(valor, tipo="num", decimales=2, sufijo=""):
 
 
 # ------------------------------------------------------------------ #
+# Gráfica técnica con matplotlib                                      #
+# ------------------------------------------------------------------ #
+def _grafica_tecnica_png(precios, ticker: str) -> bytes | None:
+    try:
+        from domain.technical_engine import (
+            calcular_rsi, calcular_macd,
+            calcular_bollinger, calcular_medias_moviles,
+        )
+
+        rsi = calcular_rsi(precios)
+        macd_df = calcular_macd(precios)
+        bollinger = calcular_bollinger(precios)
+        medias = calcular_medias_moviles(precios)
+
+        fig, (ax1, ax2, ax3) = plt.subplots(
+            3, 1,
+            figsize=(12, 9),
+            gridspec_kw={"height_ratios": [3, 1.5, 1]},
+            sharex=True,
+        )
+        fig.patch.set_facecolor("#1a1a2e")
+        for ax in (ax1, ax2, ax3):
+            ax.set_facecolor("#16213e")
+            ax.tick_params(colors="white", labelsize=7)
+            ax.yaxis.label.set_color("white")
+            for spine in ax.spines.values():
+                spine.set_edgecolor("#444")
+
+        fechas = precios.index
+
+        # Panel 1: Precio + Bollinger + Medias
+        ax1.plot(fechas, precios["Close"], color="#e0e0e0",
+                 linewidth=1, label="Precio")
+
+        if not bollinger.empty:
+            ax1.plot(fechas, bollinger["banda_alta"],
+                     linewidth=0.8, linestyle="--",
+                     label="Bollinger Alta", color="#6464ff")
+            ax1.plot(fechas, bollinger["media"],
+                     linewidth=0.8, linestyle=":",
+                     label="Bollinger Media", color="#4444cc")
+            ax1.plot(fechas, bollinger["banda_baja"],
+                     linewidth=0.8, linestyle="--",
+                     label="Bollinger Baja", color="#6464ff")
+            ax1.fill_between(fechas,
+                             bollinger["banda_baja"],
+                             bollinger["banda_alta"],
+                             alpha=0.05, color="#6464ff")
+
+        colores_medias = {
+            "sma20": "#ff9800", "sma50": "#2196f3",
+            "sma200": "#9c27b0", "ema20": "#ff5722",
+        }
+        nombres_medias = {
+            "sma20": "SMA 20", "sma50": "SMA 50",
+            "sma200": "SMA 200", "ema20": "EMA 20",
+        }
+        if not medias.empty:
+            for col, color in colores_medias.items():
+                if col in medias.columns:
+                    ax1.plot(fechas, medias[col], color=color,
+                             linewidth=1, label=nombres_medias[col])
+
+        ax1.set_ylabel("Precio", color="white", fontsize=8)
+        ax1.legend(loc="upper left", fontsize=6, facecolor="#1a1a2e",
+                   labelcolor="white", framealpha=0.7)
+        ax1.set_title(f"{ticker} - Analisis Tecnico",
+                      color="white", fontsize=10)
+
+        # Panel 2: MACD
+        if not macd_df.empty:
+            ax2.plot(fechas, macd_df["macd"], color="#2196f3",
+                     linewidth=1, label="MACD")
+            ax2.plot(fechas, macd_df["senal"], color="#ff9800",
+                     linewidth=1, label="Senal")
+            hist = macd_df["histograma"].fillna(0)
+            colores_hist = ["#26a69a" if v >= 0 else "#ef5350" for v in hist]
+            ax2.bar(fechas, hist, color=colores_hist, alpha=0.6, width=1)
+            ax2.axhline(0, color="#666", linewidth=0.5)
+            ax2.set_ylabel("MACD", color="white", fontsize=8)
+            ax2.legend(loc="upper left", fontsize=6, facecolor="#1a1a2e",
+                       labelcolor="white", framealpha=0.7)
+
+        # Panel 3: RSI
+        if not rsi.empty:
+            ax3.plot(fechas, rsi, color="#9c27b0", linewidth=1, label="RSI")
+            ax3.axhline(70, color="#ef5350", linewidth=0.8, linestyle="--")
+            ax3.axhline(30, color="#26a69a", linewidth=0.8, linestyle="--")
+            ax3.fill_between(fechas, 70, rsi.clip(lower=70),
+                             alpha=0.15, color="#ef5350")
+            ax3.fill_between(fechas, rsi.clip(upper=30), 30,
+                             alpha=0.15, color="#26a69a")
+            ax3.set_ylim(0, 100)
+            ax3.set_ylabel("RSI", color="white", fontsize=8)
+
+        ax3.xaxis.set_major_formatter(mdates.DateFormatter("%b %y"))
+        ax3.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+        plt.setp(ax3.xaxis.get_majorticklabels(),
+                 rotation=30, ha="right", color="white", fontsize=7)
+
+        plt.tight_layout(pad=1.5)
+
+        buf = io.BytesIO()
+        plt.savefig(buf, format="png", dpi=150,
+                    facecolor=fig.get_facecolor(), bbox_inches="tight")
+        plt.close(fig)
+        buf.seek(0)
+        return buf.read()
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"Error generando grafica tecnica: {e}")
+        return None
+
+
+# ------------------------------------------------------------------ #
+# Gráfica de scoring con matplotlib                                   #
+# ------------------------------------------------------------------ #
+def _grafica_scoring_png(desglose: list) -> bytes | None:
+    try:
+        tecnico_pts = sum(
+            d["peso"] for d in desglose
+            if d["evaluado"] and d["cumplido"] and d["categoria"] == "Tecnico"
+        )
+        tecnico_total = sum(
+            d["peso"] for d in desglose
+            if d["evaluado"] and d["categoria"] == "Tecnico"
+        )
+        fund_pts = sum(
+            d["peso"] for d in desglose
+            if d["evaluado"] and d["cumplido"] and d["categoria"] == "Fundamental"
+        )
+        fund_total = sum(
+            d["peso"] for d in desglose
+            if d["evaluado"] and d["categoria"] == "Fundamental"
+        )
+
+        fig, ax = plt.subplots(figsize=(7, 3))
+        fig.patch.set_facecolor("#1a1a2e")
+        ax.set_facecolor("#16213e")
+        ax.tick_params(colors="white", labelsize=9)
+        for spine in ax.spines.values():
+            spine.set_edgecolor("#444")
+
+        x = ["Tecnico", "Fundamental"]
+        posibles = [tecnico_total, fund_total]
+        obtenidos = [tecnico_pts, fund_pts]
+
+        ax.bar(x, posibles, label="Posibles", width=0.4,
+               color=["#2196f3", "#ff9800"], alpha=0.3)
+        ax.bar(x, obtenidos, label="Obtenidos", width=0.4,
+               color=["#2196f3", "#ff9800"], alpha=0.9)
+
+        ax.set_title("Puntos por categoria", color="white", fontsize=10)
+        ax.set_ylabel("Puntos", color="white", fontsize=9)
+        ax.legend(facecolor="#1a1a2e", labelcolor="white", fontsize=8)
+
+        for i, (pos, obt) in enumerate(zip(posibles, obtenidos)):
+            ax.text(i, obt + 0.5, str(obt), ha="center",
+                    color="white", fontsize=9, fontweight="bold")
+
+        plt.tight_layout()
+        buf = io.BytesIO()
+        plt.savefig(buf, format="png", dpi=150,
+                    facecolor=fig.get_facecolor(), bbox_inches="tight")
+        plt.close(fig)
+        buf.seek(0)
+        return buf.read()
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"Error generando grafica scoring: {e}")
+        return None
+
+
+# ------------------------------------------------------------------ #
 # Función principal                                                   #
 # ------------------------------------------------------------------ #
 def generar_reporte(datos_analisis: dict) -> bytes:
-    """Devuelve el PDF en bytes para que Streamlit lo ofrezca como descarga.
-
-    datos_analisis debe contener:
-      - ticker (str)
-      - nombre (str | None)
-      - sector (str | None)
-      - moneda (str | None)
-      - precio_actual (float | None)
-      - resultado_scoring (dict): salida de scoring_engine.calcular_score
-      - fundamental (dict): salida de fundamental_engine.procesar_fundamentales
-    """
-    ticker = datos_analisis.get("ticker", "—")
+    """Devuelve el PDF en bytes para que Streamlit lo ofrezca como descarga."""
+    ticker = datos_analisis.get("ticker", "-")
     nombre = datos_analisis.get("nombre") or ticker
-    sector = datos_analisis.get("sector") or "—"
+    sector = datos_analisis.get("sector") or "-"
     moneda = datos_analisis.get("moneda") or ""
     precio_actual = datos_analisis.get("precio_actual")
     resultado = datos_analisis.get("resultado_scoring", {})
     fundamental = datos_analisis.get("fundamental", {})
+    precios = datos_analisis.get("precios")
 
     score = resultado.get("score")
-    recomendacion = resultado.get("recomendacion", "—")
+    recomendacion = resultado.get("recomendacion", "-")
     desglose = resultado.get("desglose", [])
     descargo = resultado.get("descargo", config.DESCARGO_RESPONSABILIDAD)
 
@@ -119,39 +287,36 @@ def generar_reporte(datos_analisis: dict) -> bytes:
     estilo_normal = estilos["Normal"]
     estilo_pie = ParagraphStyle(
         "Pie", parent=estilos["Normal"],
-        fontSize=8, textColor=colors.grey, alignment=TA_CENTER, spaceBefore=12,
-    )
-    estilo_rec = ParagraphStyle(
-        "Rec", parent=estilos["Normal"],
-        fontSize=26, textColor=_color_recomendacion(recomendacion),
-        alignment=TA_CENTER, spaceAfter=4,
+        fontSize=8, textColor=colors.grey,
+        alignment=TA_CENTER, spaceBefore=12,
     )
 
     historia = []
 
-    # ---------------------------------------------------------------- #
-    # PORTADA                                                           #
-    # ---------------------------------------------------------------- #
+    # --- Portada ---
     historia.append(Spacer(1, 0.5 * cm))
-    historia.append(Paragraph(f"Reporte de Análisis Bursátil", estilo_titulo))
+    historia.append(Paragraph("Reporte de Analisis Bursatil", estilo_titulo))
     historia.append(Paragraph(f"{nombre} ({ticker})", estilo_subtitulo))
-    historia.append(Paragraph(f"Sector: {sector} | Fecha: {date.today().strftime('%d/%m/%Y')}", estilo_subtitulo))
-    historia.append(HRFlowable(width="100%", thickness=2, color=AZUL_OSCURO, spaceAfter=16))
+    historia.append(Paragraph(
+        f"Sector: {sector} | Fecha: {date.today().strftime('%d/%m/%Y')}",
+        estilo_subtitulo,
+    ))
+    historia.append(HRFlowable(width="100%", thickness=2,
+                                color=AZUL_OSCURO, spaceAfter=16))
 
-    # ---------------------------------------------------------------- #
-    # RESUMEN EJECUTIVO                                                 #
-    # ---------------------------------------------------------------- #
+    # --- Resumen ejecutivo ---
     historia.append(Paragraph("Resumen ejecutivo", estilo_seccion))
-
     score_str = f"{score} / 100" if score is not None else "Sin datos suficientes"
-    precio_str = _fmt(precio_actual, decimales=2, sufijo=f" {moneda}") if precio_actual else "—"
-
+    precio_str = (
+        _fmt(precio_actual, decimales=2, sufijo=f" {moneda}")
+        if precio_actual else "-"
+    )
     resumen_data = [
         ["Ticker", ticker],
         ["Nombre", nombre],
         ["Precio actual", precio_str],
         ["Score", score_str],
-        ["Recomendación", recomendacion],
+        ["Recomendacion", recomendacion],
     ]
     tabla_resumen = Table(resumen_data, colWidths=[5 * cm, 11 * cm])
     tabla_resumen.setStyle(TableStyle([
@@ -167,19 +332,34 @@ def generar_reporte(datos_analisis: dict) -> bytes:
     historia.append(tabla_resumen)
     historia.append(Spacer(1, 0.4 * cm))
 
-    # ---------------------------------------------------------------- #
-    # ANÁLISIS FUNDAMENTAL                                              #
-    # ---------------------------------------------------------------- #
-    historia.append(Paragraph("Análisis Fundamental", estilo_seccion))
+    # --- Gráfica técnica ---
+    historia.append(Paragraph("Analisis Tecnico", estilo_seccion))
+    if precios is not None and not precios.empty:
+        png_tecnico = _grafica_tecnica_png(precios, ticker)
+        if png_tecnico:
+            historia.append(Image(io.BytesIO(png_tecnico),
+                                  width=16 * cm, height=12 * cm))
+            historia.append(Spacer(1, 0.3 * cm))
+        else:
+            historia.append(Paragraph(
+                "No fue posible generar la grafica tecnica.", estilo_normal))
+    else:
+        historia.append(Paragraph(
+            "No hay datos de precios disponibles.", estilo_normal))
+
+    # --- Análisis fundamental ---
+    historia.append(Paragraph("Analisis Fundamental", estilo_seccion))
     fund_data = [
-        ["Métrica", "Valor"],
+        ["Metrica", "Valor"],
         ["P/E Ratio (TTM)", _fmt(fundamental.get("pe"), decimales=2)],
         ["EPS (TTM)", _fmt(fundamental.get("eps"), decimales=2)],
         ["ROE", _fmt(fundamental.get("roe"), tipo="pct")],
         ["Margen Neto", _fmt(fundamental.get("margen_neto"), tipo="pct")],
         ["Deuda / Capital", _fmt(fundamental.get("deuda_capital"), decimales=2)],
-        ["Flujo de Caja Libre", _fmt(fundamental.get("flujo_caja_libre"), tipo="millones",
-                                     sufijo=f" {moneda}")],
+        ["Flujo de Caja Libre", _fmt(
+            fundamental.get("flujo_caja_libre"), tipo="millones",
+            sufijo=f" {moneda}",
+        )],
     ]
     tabla_fund = Table(fund_data, colWidths=[8 * cm, 8 * cm])
     tabla_fund.setStyle(TableStyle([
@@ -193,13 +373,10 @@ def generar_reporte(datos_analisis: dict) -> bytes:
     ]))
     historia.append(tabla_fund)
 
-    # ---------------------------------------------------------------- #
-    # DESGLOSE DEL SCORING                                             #
-    # ---------------------------------------------------------------- #
+    # --- Desglose del scoring ---
     historia.append(Paragraph("Desglose del Scoring", estilo_seccion))
-
     if desglose:
-        scoring_data = [["Indicador", "Categoría", "Peso", "Estado"]]
+        scoring_data = [["Indicador", "Categoria", "Peso", "Estado"]]
         for d in desglose:
             nombre_ind = _NOMBRES_INDICADORES.get(d["indicador"], d["indicador"])
             estado = _emoji_estado(d["evaluado"], d["cumplido"])
@@ -209,11 +386,8 @@ def generar_reporte(datos_analisis: dict) -> bytes:
                 f"{d['peso']}%",
                 estado,
             ])
-
-        col_widths = [7.5 * cm, 3.5 * cm, 2 * cm, 3 * cm]
-        tabla_scoring = Table(scoring_data, colWidths=col_widths)
-
-        # Colores condicionales por estado
+        tabla_scoring = Table(scoring_data,
+                              colWidths=[7.5 * cm, 3.5 * cm, 2 * cm, 3 * cm])
         estilo_tabla = [
             ("BACKGROUND", (0, 0), (-1, 0), AZUL_OSCURO),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
@@ -232,21 +406,27 @@ def generar_reporte(datos_analisis: dict) -> bytes:
                 estilo_tabla.append(("FONTNAME", (3, i), (3, i), "Helvetica-Bold"))
             else:
                 estilo_tabla.append(("TEXTCOLOR", (3, i), (3, i), ROJO))
-
         tabla_scoring.setStyle(TableStyle(estilo_tabla))
         historia.append(tabla_scoring)
+
+    # Gráfica de barras scoring
+    if desglose:
+        png_scoring = _grafica_scoring_png(desglose)
+        if png_scoring:
+            historia.append(Spacer(1, 0.4 * cm))
+            historia.append(Image(io.BytesIO(png_scoring),
+                                  width=12 * cm, height=5 * cm))
 
     peso_eval = resultado.get("peso_evaluado", 0)
     historia.append(Spacer(1, 0.3 * cm))
     historia.append(Paragraph(
         f"Peso evaluado: {peso_eval:.0f} / 100 puntos "
         f"({100 - peso_eval:.0f} puntos sin datos disponibles).",
-        ParagraphStyle("pequeño", parent=estilo_normal, fontSize=9, textColor=colors.grey),
+        ParagraphStyle("pequeno", parent=estilo_normal,
+                       fontSize=9, textColor=colors.grey),
     ))
 
-    # ---------------------------------------------------------------- #
-    # DESCARGO DE RESPONSABILIDAD                                       #
-    # ---------------------------------------------------------------- #
+    # --- Descargo ---
     historia.append(Spacer(1, 0.8 * cm))
     historia.append(HRFlowable(width="100%", thickness=1, color=GRIS_BORDE))
     historia.append(Paragraph(descargo, estilo_pie))
@@ -254,4 +434,3 @@ def generar_reporte(datos_analisis: dict) -> bytes:
     doc.build(historia)
     buffer.seek(0)
     return buffer.read()
-

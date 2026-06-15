@@ -84,6 +84,7 @@ with st.sidebar:
                     "precio_actual": tecnico.get("precio"),
                     "resultado_scoring": resultado,
                     "fundamental": fundamental,
+                    "precios": precios,
                 }
 
                 pdf_bytes = generar_reporte(datos_pdf)
