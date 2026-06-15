@@ -103,9 +103,9 @@ def render(ticker: str) -> None:
                 "axis": {"range": [0, 100]},
                 "bar": {"color": color},
                 "steps": [
-                    {"range": [0, 40], "color": "#ef535022"},
-                    {"range": [40, 65], "color": "#ffa72622"},
-                    {"range": [65, 100], "color": "#26a69a22"},
+                    {"range": [0, 40], "color": "rgba(239,83,80,0.13)"},
+                    {"range": [40, 65], "color": "rgba(255,167,38,0.13)"},
+                    {"range": [65, 100], "color": "rgba(38,166,154,0.13)"},
                 ],
                 "threshold": {
                     "line": {"color": color, "width": 4},
@@ -161,7 +161,7 @@ def render(ticker: str) -> None:
                    marker_color=["#2196f3", "#ff9800"]),
             go.Bar(name="Posibles", x=["Técnico", "Fundamental"],
                    y=[tecnico_total, fund_total],
-                   marker_color=["#2196f344", "#ff980044"]),
+                   marker_color=["rgba(33,150,243,0.27)", "rgba(255,152,0,0.27)"]),
         ])
         fig_bar.update_layout(
             barmode="overlay", height=280, title="Puntos por categoría",
@@ -171,4 +171,3 @@ def render(ticker: str) -> None:
 
     # --- Descargo ---
     st.info(f"⚠️ {resultado.get('descargo', config.DESCARGO_RESPONSABILIDAD)}")
-
