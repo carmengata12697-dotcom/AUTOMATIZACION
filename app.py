@@ -24,7 +24,6 @@ with st.sidebar:
     ticker2 = st.text_input("Ticker 2", value="", help="Ej: GOOGL (opcional)").strip().upper()
     ticker3 = st.text_input("Ticker 3", value="", help="Ej: MSFT (opcional)").strip().upper()
 
-    # Lista solo con los tickers que se ingresaron
     tickers = [t for t in [ticker1, ticker2, ticker3] if t]
 
     st.divider()
@@ -42,56 +41,62 @@ with st.sidebar:
 
     # --- Botón descarga PDF ---
     st.markdown("### 📄 Exportar a PDF")
-    ticker_pdf = st.selectbox("Ticker para el reporte", tickers) if tickers else None
-    if st.button("Generar reporte PDF", use_container_width=True) and ticker_pdf:
+    st.caption("Genera un reporte con todos los tickers seleccionados.")
+
+    if st.button("Generar reporte PDF", use_container_width=True) and tickers:
         with st.spinner("Generando PDF…"):
             try:
                 from data_layer.yahoo_client import obtener_historico, obtener_fundamentales
-                from domain.technical_engine import calcular_rsi, calcular_macd, calcular_bollinger, calcular_medias_moviles
+                from domain.technical_engine import (
+                    calcular_rsi, calcular_macd,
+                    calcular_bollinger, calcular_medias_moviles,
+                )
                 from domain.fundamental_engine import procesar_fundamentales
                 from domain.scoring_engine import calcular_score
                 from reports.pdf_generator import generar_reporte
-
-                precios = obtener_historico(ticker_pdf, "1y")
-                crudos = obtener_fundamentales(ticker_pdf)
-                fundamental = procesar_fundamentales(crudos)
 
                 def ultimo(serie):
                     s = serie.dropna()
                     return s.iloc[-1] if not s.empty else None
 
-                rsi = calcular_rsi(precios)
-                macd_df = calcular_macd(precios)
-                bollinger = calcular_bollinger(precios)
-                medias = calcular_medias_moviles(precios)
+                datos_tickers = []
+                for ticker_pdf in tickers:
+                    precios = obtener_historico(ticker_pdf, "1y")
+                    crudos = obtener_fundamentales(ticker_pdf)
+                    fundamental = procesar_fundamentales(crudos)
 
-                tecnico = {
-                    "rsi": ultimo(rsi),
-                    "macd": ultimo(macd_df["macd"]) if not macd_df.empty else None,
-                    "senal": ultimo(macd_df["senal"]) if not macd_df.empty else None,
-                    "precio": precios["Close"].dropna().iloc[-1] if not precios.empty else None,
-                    "sma200": ultimo(medias["sma200"]) if not medias.empty and "sma200" in medias.columns else None,
-                    "banda_baja": ultimo(bollinger["banda_baja"]) if not bollinger.empty else None,
-                }
+                    rsi = calcular_rsi(precios)
+                    macd_df = calcular_macd(precios)
+                    bollinger = calcular_bollinger(precios)
+                    medias = calcular_medias_moviles(precios)
 
-                resultado = calcular_score(tecnico, fundamental)
+                    tecnico = {
+                        "rsi": ultimo(rsi),
+                        "macd": ultimo(macd_df["macd"]) if not macd_df.empty else None,
+                        "senal": ultimo(macd_df["senal"]) if not macd_df.empty else None,
+                        "precio": precios["Close"].dropna().iloc[-1] if not precios.empty else None,
+                        "sma200": ultimo(medias["sma200"]) if not medias.empty and "sma200" in medias.columns else None,
+                        "banda_baja": ultimo(bollinger["banda_baja"]) if not bollinger.empty else None,
+                    }
 
-                datos_pdf = {
-                    "ticker": ticker_pdf,
-                    "nombre": fundamental.get("nombre"),
-                    "sector": fundamental.get("sector"),
-                    "moneda": fundamental.get("moneda"),
-                    "precio_actual": tecnico.get("precio"),
-                    "resultado_scoring": resultado,
-                    "fundamental": fundamental,
-                    "precios": precios,
-                }
+                    resultado = calcular_score(tecnico, fundamental)
 
-                pdf_bytes = generar_reporte(datos_pdf)
+                    datos_tickers.append({
+                        "ticker": ticker_pdf,
+                        "nombre": fundamental.get("nombre"),
+                        "sector": fundamental.get("sector"),
+                        "moneda": fundamental.get("moneda"),
+                        "precio_actual": tecnico.get("precio"),
+                        "resultado_scoring": resultado,
+                        "fundamental": fundamental,
+                        "precios": precios,
+                    })
+
+                pdf_bytes = generar_reporte(datos_tickers)
                 st.download_button(
                     label="⬇️ Descargar PDF",
                     data=pdf_bytes,
-                    file_name=f"reporte_{ticker_pdf}.pdf",
+                    file_name=f"reporte_{'_'.join(tickers)}.pdf",
                     mime="application/pdf",
                     use_container_width=True,
                 )

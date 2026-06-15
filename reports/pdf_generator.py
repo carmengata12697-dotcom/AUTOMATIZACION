@@ -15,7 +15,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-    HRFlowable, Image,
+    HRFlowable, Image, PageBreak,
 )
 from reportlab.lib.enums import TA_CENTER
 
@@ -166,7 +166,6 @@ def _grafica_tecnica_png(precios, ticker: str) -> bytes | None:
                  rotation=30, ha="right", color="white", fontsize=7)
 
         plt.tight_layout(pad=1.5)
-
         buf = io.BytesIO()
         plt.savefig(buf, format="png", dpi=150,
                     facecolor=fig.get_facecolor(), bbox_inches="tight")
@@ -243,70 +242,40 @@ def _grafica_scoring_png(desglose: list) -> bytes | None:
 
 
 # ------------------------------------------------------------------ #
-# Función principal                                                   #
+# Sección de un ticker dentro del PDF                                 #
 # ------------------------------------------------------------------ #
-def generar_reporte(datos_analisis: dict) -> bytes:
-    """Devuelve el PDF en bytes para que Streamlit lo ofrezca como descarga."""
-    ticker = datos_analisis.get("ticker", "-")
-    nombre = datos_analisis.get("nombre") or ticker
-    sector = datos_analisis.get("sector") or "-"
-    moneda = datos_analisis.get("moneda") or ""
-    precio_actual = datos_analisis.get("precio_actual")
-    resultado = datos_analisis.get("resultado_scoring", {})
-    fundamental = datos_analisis.get("fundamental", {})
-    precios = datos_analisis.get("precios")
+def _seccion_ticker(datos: dict, estilos: dict) -> list:
+    """Genera la lista de elementos reportlab para un ticker."""
+    ticker = datos.get("ticker", "-")
+    nombre = datos.get("nombre") or ticker
+    sector = datos.get("sector") or "-"
+    moneda = datos.get("moneda") or ""
+    precio_actual = datos.get("precio_actual")
+    resultado = datos.get("resultado_scoring", {})
+    fundamental = datos.get("fundamental", {})
+    precios = datos.get("precios")
 
     score = resultado.get("score")
     recomendacion = resultado.get("recomendacion", "-")
     desglose = resultado.get("desglose", [])
-    descargo = resultado.get("descargo", config.DESCARGO_RESPONSABILIDAD)
 
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        leftMargin=2 * cm,
-        rightMargin=2 * cm,
-        topMargin=2 * cm,
-        bottomMargin=2 * cm,
-    )
+    elementos = []
 
-    estilos = getSampleStyleSheet()
-    estilo_titulo = ParagraphStyle(
-        "Titulo", parent=estilos["Title"],
-        fontSize=22, textColor=AZUL_OSCURO, spaceAfter=4,
-    )
-    estilo_subtitulo = ParagraphStyle(
-        "Subtitulo", parent=estilos["Normal"],
-        fontSize=12, textColor=colors.grey, spaceAfter=2,
-    )
-    estilo_seccion = ParagraphStyle(
-        "Seccion", parent=estilos["Heading2"],
-        fontSize=13, textColor=AZUL_OSCURO, spaceBefore=14, spaceAfter=6,
-    )
-    estilo_normal = estilos["Normal"]
-    estilo_pie = ParagraphStyle(
-        "Pie", parent=estilos["Normal"],
-        fontSize=8, textColor=colors.grey,
-        alignment=TA_CENTER, spaceBefore=12,
-    )
-
-    historia = []
-
-    # --- Portada ---
-    historia.append(Spacer(1, 0.5 * cm))
-    historia.append(Paragraph("Reporte de Analisis Bursatil", estilo_titulo))
-    historia.append(Paragraph(f"{nombre} ({ticker})", estilo_subtitulo))
-    historia.append(Paragraph(
-        f"Sector: {sector} | Fecha: {date.today().strftime('%d/%m/%Y')}",
-        estilo_subtitulo,
+    # Encabezado del ticker
+    elementos.append(Paragraph(
+        f"{nombre} ({ticker})",
+        estilos["titulo_ticker"],
     ))
-    historia.append(HRFlowable(width="100%", thickness=2,
-                                color=AZUL_OSCURO, spaceAfter=16))
+    elementos.append(Paragraph(
+        f"Sector: {sector} | Fecha: {date.today().strftime('%d/%m/%Y')}",
+        estilos["subtitulo"],
+    ))
+    elementos.append(HRFlowable(width="100%", thickness=1,
+                                color=AZUL_OSCURO, spaceAfter=10))
 
-    # --- Resumen ejecutivo ---
-    historia.append(Paragraph("Resumen ejecutivo", estilo_seccion))
-    score_str = f"{score} / 100" if score is not None else "Sin datos suficientes"
+    # Resumen ejecutivo
+    elementos.append(Paragraph("Resumen ejecutivo", estilos["seccion"]))
+    score_str = f"{score} / 100" if score is not None else "Sin datos"
     precio_str = (
         _fmt(precio_actual, decimales=2, sufijo=f" {moneda}")
         if precio_actual else "-"
@@ -329,26 +298,27 @@ def generar_reporte(datos_analisis: dict) -> bytes:
         ("FONTNAME", (1, 4), (1, 4), "Helvetica-Bold"),
         ("FONTSIZE", (1, 4), (1, 4), 13),
     ]))
-    historia.append(tabla_resumen)
-    historia.append(Spacer(1, 0.4 * cm))
+    elementos.append(tabla_resumen)
+    elementos.append(Spacer(1, 0.4 * cm))
 
-    # --- Gráfica técnica ---
-    historia.append(Paragraph("Analisis Tecnico", estilo_seccion))
+    # Gráfica técnica
+    elementos.append(Paragraph("Analisis Tecnico", estilos["seccion"]))
     if precios is not None and not precios.empty:
         png_tecnico = _grafica_tecnica_png(precios, ticker)
         if png_tecnico:
-            historia.append(Image(io.BytesIO(png_tecnico),
-                                  width=16 * cm, height=12 * cm))
-            historia.append(Spacer(1, 0.3 * cm))
+            elementos.append(Image(io.BytesIO(png_tecnico),
+                                   width=16 * cm, height=12 * cm))
+            elementos.append(Spacer(1, 0.3 * cm))
         else:
-            historia.append(Paragraph(
-                "No fue posible generar la grafica tecnica.", estilo_normal))
+            elementos.append(Paragraph(
+                "No fue posible generar la grafica tecnica.",
+                estilos["normal"]))
     else:
-        historia.append(Paragraph(
-            "No hay datos de precios disponibles.", estilo_normal))
+        elementos.append(Paragraph(
+            "No hay datos de precios disponibles.", estilos["normal"]))
 
-    # --- Análisis fundamental ---
-    historia.append(Paragraph("Analisis Fundamental", estilo_seccion))
+    # Análisis fundamental
+    elementos.append(Paragraph("Analisis Fundamental", estilos["seccion"]))
     fund_data = [
         ["Metrica", "Valor"],
         ["P/E Ratio (TTM)", _fmt(fundamental.get("pe"), decimales=2)],
@@ -371,10 +341,10 @@ def generar_reporte(datos_analisis: dict) -> bytes:
         ("PADDING", (0, 0), (-1, -1), 6),
         ("ALIGN", (1, 0), (1, -1), "RIGHT"),
     ]))
-    historia.append(tabla_fund)
+    elementos.append(tabla_fund)
 
-    # --- Desglose del scoring ---
-    historia.append(Paragraph("Desglose del Scoring", estilo_seccion))
+    # Desglose del scoring
+    elementos.append(Paragraph("Desglose del Scoring", estilos["seccion"]))
     if desglose:
         scoring_data = [["Indicador", "Categoria", "Peso", "Estado"]]
         for d in desglose:
@@ -407,29 +377,139 @@ def generar_reporte(datos_analisis: dict) -> bytes:
             else:
                 estilo_tabla.append(("TEXTCOLOR", (3, i), (3, i), ROJO))
         tabla_scoring.setStyle(TableStyle(estilo_tabla))
-        historia.append(tabla_scoring)
+        elementos.append(tabla_scoring)
 
-    # Gráfica de barras scoring
-    if desglose:
+        # Gráfica de barras scoring
         png_scoring = _grafica_scoring_png(desglose)
         if png_scoring:
-            historia.append(Spacer(1, 0.4 * cm))
-            historia.append(Image(io.BytesIO(png_scoring),
-                                  width=12 * cm, height=5 * cm))
+            elementos.append(Spacer(1, 0.4 * cm))
+            elementos.append(Image(io.BytesIO(png_scoring),
+                                   width=12 * cm, height=5 * cm))
 
     peso_eval = resultado.get("peso_evaluado", 0)
-    historia.append(Spacer(1, 0.3 * cm))
-    historia.append(Paragraph(
+    elementos.append(Spacer(1, 0.3 * cm))
+    elementos.append(Paragraph(
         f"Peso evaluado: {peso_eval:.0f} / 100 puntos "
         f"({100 - peso_eval:.0f} puntos sin datos disponibles).",
-        ParagraphStyle("pequeno", parent=estilo_normal,
+        ParagraphStyle("pequeno", parent=estilos["normal"],
                        fontSize=9, textColor=colors.grey),
     ))
 
-    # --- Descargo ---
-    historia.append(Spacer(1, 0.8 * cm))
+    return elementos
+
+
+# ------------------------------------------------------------------ #
+# Función principal                                                   #
+# ------------------------------------------------------------------ #
+def generar_reporte(datos_lista: list) -> bytes:
+    """Recibe una lista de dicts (uno por ticker) y genera el PDF completo."""
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=2 * cm,
+        rightMargin=2 * cm,
+        topMargin=2 * cm,
+        bottomMargin=2 * cm,
+    )
+
+    estilos_base = getSampleStyleSheet()
+
+    estilos = {
+        "titulo_portada": ParagraphStyle(
+            "TituloPortada", parent=estilos_base["Title"],
+            fontSize=24, textColor=AZUL_OSCURO, spaceAfter=6,
+        ),
+        "titulo_ticker": ParagraphStyle(
+            "TituloTicker", parent=estilos_base["Heading1"],
+            fontSize=18, textColor=AZUL_OSCURO, spaceBefore=6, spaceAfter=4,
+        ),
+        "subtitulo": ParagraphStyle(
+            "Subtitulo", parent=estilos_base["Normal"],
+            fontSize=11, textColor=colors.grey, spaceAfter=2,
+        ),
+        "seccion": ParagraphStyle(
+            "Seccion", parent=estilos_base["Heading2"],
+            fontSize=13, textColor=AZUL_OSCURO, spaceBefore=14, spaceAfter=6,
+        ),
+        "normal": estilos_base["Normal"],
+        "pie": ParagraphStyle(
+            "Pie", parent=estilos_base["Normal"],
+            fontSize=8, textColor=colors.grey,
+            alignment=TA_CENTER, spaceBefore=12,
+        ),
+    }
+
+    historia = []
+
+    # ---------------------------------------------------------------- #
+    # PORTADA GENERAL                                                   #
+    # ---------------------------------------------------------------- #
+    historia.append(Spacer(1, 1 * cm))
+    historia.append(Paragraph("Reporte de Analisis Bursatil", estilos["titulo_portada"]))
+    historia.append(Paragraph(
+        f"Fecha: {date.today().strftime('%d/%m/%Y')}",
+        estilos["subtitulo"],
+    ))
+
+    tickers_str = " | ".join(
+        d.get("ticker", "-") for d in datos_lista
+    )
+    historia.append(Paragraph(f"Acciones analizadas: {tickers_str}", estilos["subtitulo"]))
+    historia.append(HRFlowable(width="100%", thickness=2,
+                                color=AZUL_OSCURO, spaceAfter=16))
+
+    # Tabla resumen comparativa
+    historia.append(Paragraph("Resumen comparativo", estilos["seccion"]))
+    comp_data = [["Ticker", "Nombre", "Precio", "Score", "Recomendacion"]]
+    for d in datos_lista:
+        resultado = d.get("resultado_scoring", {})
+        moneda = d.get("moneda") or ""
+        comp_data.append([
+            d.get("ticker", "-"),
+            d.get("nombre") or d.get("ticker", "-"),
+            _fmt(d.get("precio_actual"), decimales=2, sufijo=f" {moneda}"),
+            f"{resultado.get('score', '-')} / 100" if resultado.get("score") else "-",
+            resultado.get("recomendacion", "-"),
+        ])
+
+    tabla_comp = Table(comp_data, colWidths=[2.5 * cm, 5 * cm, 3 * cm, 2.5 * cm, 3 * cm])
+    estilo_comp = [
+        ("BACKGROUND", (0, 0), (-1, 0), AZUL_OSCURO),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("GRID", (0, 0), (-1, -1), 0.5, GRIS_BORDE),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, GRIS_CLARO]),
+        ("PADDING", (0, 0), (-1, -1), 6),
+        ("ALIGN", (3, 0), (3, -1), "CENTER"),
+        ("ALIGN", (4, 0), (4, -1), "CENTER"),
+    ]
+    for i, d in enumerate(datos_lista, start=1):
+        rec = d.get("resultado_scoring", {}).get("recomendacion", "-")
+        estilo_comp.append(
+            ("TEXTCOLOR", (4, i), (4, i), _color_recomendacion(rec))
+        )
+        estilo_comp.append(
+            ("FONTNAME", (4, i), (4, i), "Helvetica-Bold")
+        )
+    tabla_comp.setStyle(TableStyle(estilo_comp))
+    historia.append(tabla_comp)
+    historia.append(Spacer(1, 0.5 * cm))
+
+    # ---------------------------------------------------------------- #
+    # SECCIÓN POR TICKER (una página nueva por cada uno)               #
+    # ---------------------------------------------------------------- #
+    for i, datos in enumerate(datos_lista):
+        historia.append(PageBreak())
+        historia.extend(_seccion_ticker(datos, estilos))
+
+    # ---------------------------------------------------------------- #
+    # DESCARGO DE RESPONSABILIDAD                                       #
+    # ---------------------------------------------------------------- #
+    historia.append(Spacer(1, 1 * cm))
     historia.append(HRFlowable(width="100%", thickness=1, color=GRIS_BORDE))
-    historia.append(Paragraph(descargo, estilo_pie))
+    historia.append(Paragraph(config.DESCARGO_RESPONSABILIDAD, estilos["pie"]))
 
     doc.build(historia)
     buffer.seek(0)
