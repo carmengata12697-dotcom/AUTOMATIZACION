@@ -113,4 +113,4 @@ with tab2:
 with tab3:
     tab_recommendation.render(tickers)
 with tab4:
-    tab_portfolio.render()
+    tab_portfolio.render(tickers)
