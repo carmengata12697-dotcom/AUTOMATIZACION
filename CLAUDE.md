@@ -26,9 +26,11 @@ responde preguntas sobre el informe ya calculado.
 El LLM **nunca calcula ni inventa**:
 
 1. `llm/intent_parser.py` traduce lenguaje natural a `{ticker: peso}`. Nada más.
-2. `llm/report_chat.py` responde preguntas usando **únicamente** los resultados
-   que le pasa el código determinista. Tiene prohibido generar cifras o juicios
-   que no estén en ese contexto (*grounding*).
+2. El Q&A es un sistema **RAG** (`llm/RAG.py`): recupera del informe ya calculado
+   solo lo relevante a la pregunta (tickers + glosario de conceptos), aumenta el
+   prompt y genera la respuesta. Usa **únicamente** esos resultados; tiene
+   prohibido generar cifras o juicios que no estén en el contexto (*grounding*).
+   `llm/report_chat.py` se mantiene como punto de entrada y delega en `RAG.py`.
 3. La recomendación Comprar/Neutral/Evitar **sale del `scoring_engine`**, nunca
    del LLM. Siempre acompañada del descargo de `config.DESCARGO_RESPONSABILIDAD`.
 
@@ -60,6 +62,11 @@ Pruebas (`pytest`, objetivo 70% sobre `domain/`) y documentación en paralelo.
   Linux / macOS) que provocan los nombres con tildes.
 - Los **pesos del scoring** viven en `config.PESOS_SCORING`, no incrustados en el
   código del motor.
+- **Groq como proveedor del LLM** (modelos open-source gratuitos, p. ej.
+  `llama-3.3-70b-versatile`) en lugar de Anthropic: cuota gratuita suficiente para
+  el proyecto. Toda la comunicación con la API pasa por `llm/groq_client.py`
+  (única puerta al LLM, igual que `data_layer` lo es a Yahoo). El modelo se
+  configura en `config.LLM_MODELO`.
 
 ## Convenciones
 
