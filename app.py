@@ -4,7 +4,7 @@ Ejecutar con:  streamlit run app.py
 """
 import streamlit as st
 
-from ui import tab_technical, tab_fundamental, tab_recommendation, tab_portfolio
+from ui import tab_technical, tab_fundamental, tab_recommendation, tab_portfolio, tab_chat
 
 st.set_page_config(
     page_title="Analizador Bursátil con IA",
@@ -103,8 +103,9 @@ with st.sidebar:
             except Exception as e:
                 st.error(f"Error generando PDF: {e}")
 
-tab1, tab2, tab3, tab4 = st.tabs(
-    ["📈 Análisis Técnico", "📊 Análisis Fundamental", "🎯 Recomendación", "💼 Cartera"]
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    ["📈 Análisis Técnico", "📊 Análisis Fundamental", "🎯 Recomendación",
+     "💼 Cartera", "💬 Asistente"]
 )
 with tab1:
     tab_technical.render(tickers)
@@ -114,3 +115,5 @@ with tab3:
     tab_recommendation.render(tickers)
 with tab4:
     tab_portfolio.render(tickers)
+with tab5:
+    tab_chat.render(tickers)
