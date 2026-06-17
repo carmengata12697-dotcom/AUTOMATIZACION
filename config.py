@@ -47,3 +47,10 @@ DESCARGO_RESPONSABILIDAD = (
     "Esta recomendacion es orientativa y se genera de forma automatica a partir "
     "de reglas predefinidas. No constituye asesoria financiera profesional."
 )
+
+# --- Capa LLM (chatbot) ---
+# Cerebro del chatbot: Groq (modelos open-source gratuitos, con limites de uso).
+# La clave NO va aqui: se lee de GROQ_API_KEY (archivo .env, ignorado por git).
+# Modelo por defecto: Llama 3.3 70B (buena calidad, gratuito en Groq). Alternativa
+# mas rapida: "llama-3.1-8b-instant".
+LLM_MODELO = "llama-3.3-70b-versatile"
