@@ -17,12 +17,18 @@ source venv/bin/activate        # En Windows: venv\Scripts\activate
 # 2. Instalar dependencias
 pip install -r requirements.txt
 
-# 3. Arrancar la app
+# 3. (Opcional) Activar el chatbot: copia .env.example a .env y pon tu clave
+#    de Groq (gratuita en https://console.groq.com/keys)
+cp .env.example .env        # En Windows: copy .env.example .env
+
+# 4. Arrancar la app
 streamlit run app.py
 ```
 
-Debería abrirse el navegador con las cuatro pestañas mostrando "En construcción".
-Si llegas hasta aquí, el armazón funciona.
+Debería abrirse el navegador con las cinco pestañas (Técnico, Fundamental,
+Recomendación, Cartera y 💬 Asistente). El **Asistente** es un chatbot que
+explica el informe ya calculado; necesita la clave de Groq en `.env`. El resto
+de la app funciona sin clave.
 
 ## Estructura
 

@@ -60,6 +60,11 @@ Pruebas (`pytest`, objetivo 70% sobre `domain/`) y documentación en paralelo.
   Linux / macOS) que provocan los nombres con tildes.
 - Los **pesos del scoring** viven en `config.PESOS_SCORING`, no incrustados en el
   código del motor.
+- **Groq como proveedor del LLM** (modelos open-source gratuitos, p. ej.
+  `llama-3.3-70b-versatile`) en lugar de Anthropic: cuota gratuita suficiente para
+  el proyecto. Toda la comunicación con la API pasa por `llm/groq_client.py`
+  (única puerta al LLM, igual que `data_layer` lo es a Yahoo). El modelo se
+  configura en `config.LLM_MODELO`.
 
 ## Convenciones
 
