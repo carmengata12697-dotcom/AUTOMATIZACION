@@ -1,8 +1,9 @@
-"""Pestana del Asistente (chatbot). Q&A con grounding sobre el informe calculado.
+"""Pestaña del Asistente (chatbot). Q&A con RAG sobre el informe ya calculado.
 
-Esta pestana NO calcula la recomendacion: reune los resultados que ya producen
-los motores deterministas (los mismos que usa la pestana de Recomendacion),
-construye el contexto y se lo pasa a llm.report_chat. El LLM solo explica.
+Esta pestaña NO calcula la recomendación: reúne los resultados que ya producen
+los motores deterministas (los mismos que usa la pestaña de Recomendación),
+construye el contexto y se lo pasa al sistema RAG (llm/RAG.py). El LLM solo
+explica; los números salen siempre de los motores.
 """
 import streamlit as st
 
@@ -13,7 +14,7 @@ from domain.technical_engine import (
 )
 from domain.fundamental_engine import procesar_fundamentales
 from domain.scoring_engine import calcular_score
-from llm import groq_client, report_chat
+from llm import groq_client, RAG
 
 
 def _ultimo(serie):
@@ -57,31 +58,43 @@ def _analizar_ticker(ticker: str) -> dict:
 
 @st.cache_data(show_spinner=False)
 def _construir_contexto(tickers: tuple) -> dict:
-    """Construye el contexto de analisis para todos los tickers (cacheado).
+    """Construye el contexto de análisis para todos los tickers (cacheado).
 
     Se cachea por la tupla de tickers para no volver a descargar y recalcular en
-    cada turno de la conversacion.
+    cada turno de la conversación.
     """
     return {"tickers": {t: _analizar_ticker(t) for t in tickers}}
 
 
 _SUGERENCIAS = [
-    "¿Cual de los tickers tiene mejor recomendacion y por que?",
-    "Explica el score de la primera accion criterio a criterio.",
-    "¿Que significa que el RSI este en ese nivel?",
+    "¿Cuál de los tickers tiene mejor recomendación y por qué?",
+    "Explica el score de la primera acción criterio a criterio.",
+    "¿Qué significa que el RSI esté en ese nivel?",
     "Compara el P/E y el ROE de los tickers seleccionados.",
 ]
 
 
+def _procesar(pregunta: str, contexto: dict) -> None:
+    """Añade la pregunta al historial, genera la respuesta y la muestra."""
+    st.session_state.chat_historial.append({"role": "user", "content": pregunta})
+    with st.chat_message("user"):
+        st.markdown(pregunta)
+    with st.chat_message("assistant"):
+        with st.spinner("Pensando…"):
+            respuesta = RAG.responder(pregunta, contexto)
+        st.markdown(respuesta)
+    st.session_state.chat_historial.append({"role": "assistant", "content": respuesta})
+
+
 def render(tickers: list) -> None:
     st.subheader("💬 Asistente del informe")
-    st.caption("Pregunta sobre el analisis ya calculado. El asistente solo explica "
+    st.caption("Pregunta sobre el análisis ya calculado. El asistente solo explica "
                "los resultados de los motores; no inventa cifras ni da una "
-               "recomendacion distinta a la del scoring.")
+               "recomendación distinta a la del scoring.")
 
     if not groq_client.disponible():
         st.warning(groq_client.aviso_no_disponible())
-        st.info("Para activarlo: crea un archivo `.env` en la raiz con "
+        st.info("Para activarlo: crea un archivo `.env` en la raíz con "
                 "`GROQ_API_KEY=tu_clave` y reinicia la app.")
         return
 
@@ -95,35 +108,34 @@ def render(tickers: list) -> None:
 
     st.success(f"Asistente listo. Tickers en contexto: {', '.join(tickers)}")
 
-    # Historial de conversacion por sesion.
     if "chat_historial" not in st.session_state:
         st.session_state.chat_historial = []
 
-    with st.expander("💡 Ejemplos de preguntas"):
-        for s in _SUGERENCIAS:
-            st.markdown(f"- {s}")
+    # Preguntas rápidas como botones: un clic envía la pregunta sin escribir.
+    st.markdown("**💡 Preguntas rápidas:**")
+    pregunta = None
+    columnas = st.columns(2)
+    for i, sugerencia in enumerate(_SUGERENCIAS):
+        if columnas[i % 2].button(sugerencia, key=f"sug_{i}", use_container_width=True):
+            pregunta = sugerencia
 
+    st.divider()
+
+    # Historial de la conversación.
     for mensaje in st.session_state.chat_historial:
         with st.chat_message(mensaje["role"]):
             st.markdown(mensaje["content"])
 
-    pregunta = st.chat_input("Escribe tu pregunta sobre el analisis…")
+    # Entrada de texto libre (tiene prioridad si el usuario escribe).
+    escrita = st.chat_input("Escribe tu pregunta sobre el análisis…")
+    if escrita:
+        pregunta = escrita
+
     if pregunta:
-        st.session_state.chat_historial.append({"role": "user", "content": pregunta})
-        with st.chat_message("user"):
-            st.markdown(pregunta)
-
-        with st.chat_message("assistant"):
-            with st.spinner("Pensando…"):
-                respuesta = report_chat.responder(pregunta, contexto)
-            st.markdown(respuesta)
-
-        st.session_state.chat_historial.append(
-            {"role": "assistant", "content": respuesta}
-        )
+        _procesar(pregunta, contexto)
 
     if st.session_state.chat_historial:
-        if st.button("🗑️ Limpiar conversacion"):
+        if st.button("🗑️ Limpiar conversación"):
             st.session_state.chat_historial = []
             st.rerun()
 
