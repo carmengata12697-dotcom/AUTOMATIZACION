@@ -1,80 +1,97 @@
 # Analizador Bursátil con IA
 
-Aplicación web que analiza acciones cotizadas, compone carteras y emite una
-recomendación mediante un motor de *scoring* determinista, con un asistente
+Aplicación web que analiza acciones cotizadas, compara varias a la vez y emite
+una recomendación mediante un motor de *scoring* determinista, con un asistente
 conversacional (LLM) que **explica** los resultados sin inventarlos.
 
-> Estado: **esqueleto** (rama `feature/streamlit-base`). La estructura y una app
-> mínima ejecutable están montadas; los motores de cálculo aún no.
+Proyecto académico — Máster en IA Aplicada a las Finanzas.
+
+## Qué hace
+
+- **Análisis técnico**: RSI, MACD, Bandas de Bollinger y medias móviles, con gráficas interactivas.
+- **Análisis fundamental**: P/E, EPS, ROE, deuda/capital, margen neto y flujo de caja libre.
+- **Recomendación**: score de 0 a 100 con semáforo (Comprar / Neutral / Evitar) y desglose por indicador, mediante un motor de reglas con pesos transparentes.
+- **Cartera**: comparación y ranking de varios tickers a la vez.
+- **Reporte PDF**: informe descargable con gráficas, tablas y el desglose del scoring.
+- **Asistente (chatbot)**: responde preguntas sobre el informe ya calculado, sin inventar cifras.
+
+Soporta tickers de EE.UU. y Latinoamérica (p. ej. `AAPL`, `ECOPETROL.CL`, `WALMEX.MX`, `PETR4.SA`).
 
 ## Cómo ejecutar
 
 ```bash
-# 1. Crear y activar un entorno virtual
+# 1. Entorno virtual
 python -m venv venv
-source venv/bin/activate        # En Windows: venv\Scripts\activate
+source venv/bin/activate          # Windows: venv\Scripts\activate
 
-# 2. Instalar dependencias
+# 2. Dependencias
 pip install -r requirements.txt
 
-# 3. (Opcional) Activar el chatbot: copia .env.example a .env y pon tu clave
-#    de Groq (gratuita en https://console.groq.com/keys)
-cp .env.example .env        # En Windows: copy .env.example .env
+# 3. (Opcional) Chatbot: copia la plantilla y pon tu clave de Groq
+cp .env.example .env              # Windows: copy .env.example .env
+#    Clave gratuita en https://console.groq.com/keys
 
-# 4. Arrancar la app
+# 4. Arrancar
 streamlit run app.py
 ```
 
-Debería abrirse el navegador con las cinco pestañas (Técnico, Fundamental,
-Recomendación, Cartera y 💬 Asistente). El **Asistente** es un chatbot que
-explica el informe ya calculado; necesita la clave de Groq en `.env`. El resto
-de la app funciona sin clave.
+Se abre el navegador con cinco pestañas: Técnico, Fundamental, Recomendación,
+Cartera y Asistente. El Asistente necesita la clave de Groq en `.env`; el resto
+de la app funciona sin ella.
 
-## Estructura
+## Pruebas
+
+```bash
+python -m pytest                    # toda la suite
+python -m pytest --cov=domain       # con cobertura sobre los motores
+```
+
+Los motores de dominio (técnico, fundamental, scoring) tienen pruebas unitarias
+con datos sintéticos; cobertura aproximada del 95 % sobre `domain/`.
+
+## Arquitectura
+
+Separada por capas; la lógica de cálculo no vive en la interfaz.
 
 ```
 .
-├── app.py                  # Punto de entrada Streamlit (solo presenta)
-├── config.py               # Parámetros: mercados, ventanas, PESOS del scoring
+├── app.py                  # Entrada Streamlit (solo presenta)
+├── config.py               # Mercados, ventanas y PESOS/umbrales del scoring
 ├── data_layer/             # ÚNICA puerta a Yahoo Finance
 │   └── yahoo_client.py
-├── domain/                 # Lógica de negocio (sin API, fácil de testear)
-│   ├── technical_engine.py     # RSI, MACD, Bollinger, medias móviles
-│   ├── fundamental_engine.py   # Ratios financieros
-│   ├── scoring_engine.py       # Núcleo determinista de la recomendación
-│   └── portfolio_engine.py     # Cartera + métricas del conjunto
-├── ui/                     # Pestañas de Streamlit (sin cálculo)
-├── reports/                # Generación del PDF
-├── llm/                    # Chatbot: parseo de intención + Q&A con grounding
-├── tests/                  # pytest (objetivo: 70% sobre domain/)
+├── domain/                 # Lógica de negocio (sin API, testeable)
+│   ├── technical_engine.py
+│   ├── fundamental_engine.py
+│   ├── scoring_engine.py
+│   └── portfolio_engine.py     # reservado (la comparación vive hoy en la UI)
+├── ui/                     # Pestañas de Streamlit
+│   ├── tab_technical.py · tab_fundamental.py · tab_recommendation.py
+│   ├── tab_portfolio.py
+│   └── tab_chat.py
+├── llm/                    # Chatbot: cliente Groq, RAG, intención y Q&A
+├── reports/
+│   └── pdf_generator.py
+├── scripts/
+│   └── validar_datos.py
+├── tests/
 └── requirements.txt
 ```
 
-## Regla de oro del proyecto
+## Regla de oro
 
 El LLM **nunca calcula ni inventa**. Solo traduce la petición del usuario a datos
-estructurados y explica resultados que ya produjeron los motores deterministas.
-La recomendación de compra sale siempre del `scoring_engine`, acompañada del
-descargo de responsabilidad. (Detalle completo en `CLAUDE.md`.)
+estructurados y explica los resultados que ya produjeron los motores
+deterministas. La recomendación (Comprar / Neutral / Evitar) sale siempre del
+`scoring_engine`, acompañada del descargo: *esta recomendación es orientativa y
+no constituye asesoría financiera profesional*. (Detalle completo en `CLAUDE.md`.)
 
-## Orden de construcción
+## Flujo de trabajo en GitHub
 
-1. `data_layer/yahoo_client.py` — y validar qué datos llegan para tickers de
-   EE.UU. y Latinoamérica.
-2. Motores de dominio: técnico, fundamental, scoring.
-3. `portfolio_engine`.
-4. Pestañas de la UI.
-5. Reporte PDF.
-6. Capa LLM (la última).
+- `main`: rama estable e integrada.
+- `feature/*`: una rama por funcionalidad, fusionada a `main` mediante Pull Request.
+- Commits con [Conventional Commits](https://www.conventionalcommits.org/)
+  (`feat:`, `fix:`, `chore:`, `test:`, `docs:`), descriptivos y repartidos entre los integrantes.
 
-Las pruebas y la documentación acompañan cada paso, no van al final.
+## Tecnologías
 
-## Ramas
-
-- `main`: estable.
-- `develop`: integración.
-- `feature/*`: una por funcionalidad/integrante (ej. `feature/streamlit-base`,
-  `feature/technical-engine`).
-
-Commits con [Conventional Commits](https://www.conventionalcommits.org/)
-(`feat:`, `fix:`, `docs:`, `test:`), descriptivos y repartidos entre integrantes.
+Python · Streamlit · yfinance · ta · Plotly · reportlab · Groq · pytest

@@ -1,24 +1,15 @@
-"""Motor de cartera: agrega varios activos en una cartera ponderada.
-
-Sustituye al "comparador" de la propuesta original. Toma los tickers y pesos
-que pidio el usuario (estructurados por la capa LLM o por la UI) y calcula las
-metricas del CONJUNTO. Aqui esta la sustancia financiera propia del proyecto.
-Estado: ESQUELETO.
+"""Motor de cartera.
+ 
+ESTADO ACTUAL
+-------------
+En esta version, la logica de comparacion y ranking de varios tickers vive en la
+capa de presentacion (ui/tab_portfolio.py), que llama directamente a los motores
+tecnico, fundamental y de scoring para cada activo seleccionado.
+ 
+Este modulo queda reservado para una futura extraccion de esa logica al dominio:
+composicion de cartera ponderada (pesos por activo) y metricas de conjunto
+(correlacion entre activos, diversificacion y riesgo agregado), de modo que la UI
+solo presente y no calcule.
+ 
+Mientras tanto no expone funciones y no debe importarse.
 """
-from __future__ import annotations
-
-
-def normalizar_pesos(pesos_por_ticker: dict) -> dict:
-    """Asegura que los pesos sumen 1.0 (equiponderada si no se especifican)."""
-    raise NotImplementedError
-
-
-def calcular_metricas_cartera(scores_por_ticker: dict, pesos_por_ticker: dict,
-                              historicos: dict) -> dict:
-    """Metricas a nivel cartera.
-
-    Devuelve un dict con: score_ponderado, matriz de correlacion entre activos,
-    medida de diversificacion y riesgo agregado. Todo calculado aqui; el LLM
-    solo lo explica despues.
-    """
-    raise NotImplementedError
