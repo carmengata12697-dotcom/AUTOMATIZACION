@@ -46,7 +46,48 @@ def obtener_historico(ticker: str, periodo: str = "1y") -> pd.DataFrame:
     datos.index.name = "Fecha"
     return datos
  
- 
+def verificar_disponibilidad_yahoo(ticker_referencia: str = "AAPL") -> dict:
+    """Verifica si Yahoo Finance responde y reporta la fecha del último dato
+    No interpreta si el mercado está abierto o cerrado. Un dato del último día
+    hábil sigue representando una fuente disponible, incluso en fines de semana
+    o fuera del horario de negociación
+    """
+    try:
+        datos = yf.Ticker(ticker_referencia).history(
+            period="5d",
+            auto_adjust=True,
+        )
+    except Exception:
+        return {
+            "estado": "error",
+            "fecha_ultimo_dato": None,
+            "mensaje": "No fue posible consultar Yahoo Finance",
+        }
+
+    if datos is None or datos.empty or "Close" not in datos.columns:
+        return {
+            "estado": "sin_datos",
+            "fecha_ultimo_dato": None,
+            "mensaje": "No se recibieron datos desde Yahoo Finance",
+        }
+
+    datos_validos = datos.dropna(subset=["Close"])
+
+    if datos_validos.empty:
+        return {
+            "estado": "sin_datos",
+            "fecha_ultimo_dato": None,
+            "mensaje": "No se recibieron datos desde Yahoo Finance",
+        }
+
+    fecha_ultimo_dato = pd.Timestamp(datos_validos.index[-1]).date().isoformat()
+
+    return {
+        "estado": "disponible",
+        "fecha_ultimo_dato": fecha_ultimo_dato,
+        "mensaje": "Fuente de datos disponible",
+    }
+
 # Mapa: clave limpia del proyecto -> clave cruda en yfinance .info
 _MAPA_FUNDAMENTALES = {
     "pe": "trailingPE",
