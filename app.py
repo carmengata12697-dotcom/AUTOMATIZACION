@@ -4,7 +4,13 @@ Ejecutar con:  streamlit run app.py
 """
 import streamlit as st
 
+from data_layer.yahoo_client import verificar_disponibilidad_yahoo
 from ui import tab_technical, tab_fundamental, tab_recommendation, tab_portfolio, tab_chat
+
+@st.cache_data(ttl=300, show_spinner=False)
+def obtener_estado_yahoo():
+    """Consulta el estado de Yahoo Finance sin repetir llamadas innecesarias"""
+    return verificar_disponibilidad_yahoo()
 
 st.set_page_config(
     page_title="Analizador Bursátil con IA",
@@ -18,6 +24,31 @@ st.caption("Análisis técnico, fundamental y recomendación automatizada")
 # --- Sidebar ---
 with st.sidebar:
     st.header("⚙️ Configuración")
+    estado_yahoo = obtener_estado_yahoo()
+
+    st.caption("Estado de la fuente de datos")
+
+    if estado_yahoo["estado"] == "disponible":
+        st.success(
+            "🟢 Yahoo Finance disponible\n\n"
+            f"Último dato disponible: {estado_yahoo['fecha_ultimo_dato']}"
+        )
+        st.caption(
+            "La fecha puede corresponder al último día hábil "
+            "si el mercado está cerrado."
+        )
+    elif estado_yahoo["estado"] == "sin_datos":
+        st.warning(
+            "🟡 Yahoo Finance respondió, pero no se recibieron "
+            "datos de referencia."
+        )
+    else:
+        st.error(
+            "🔴 No fue posible consultar Yahoo Finance. "
+            "Revise la conexión o intente nuevamente."
+        )
+
+    st.divider()
 
     st.markdown("**Selecciona hasta 3 tickers:**")
     ticker1 = st.text_input("Ticker 1", value="AAPL", help="Ej: AAPL").strip().upper()
