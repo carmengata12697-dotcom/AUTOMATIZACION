@@ -1,6 +1,7 @@
 import pandas as pd
 
-from reports.pdf_generator import generar_reporte
+from datetime import date
+from reports.pdf_generator import generar_reporte, _texto_trazabilidad
 
 
 def _desglose_base():
@@ -127,3 +128,27 @@ def test_generar_reporte_con_precios_crea_grafica_tecnica():
     assert isinstance(pdf_bytes, bytes)
     assert pdf_bytes.startswith(b"%PDF")
     assert len(pdf_bytes) > 1_000
+
+def test_texto_trazabilidad_incluye_fuente_y_fechas():
+    texto = _texto_trazabilidad(
+        {
+            "fuente_datos": "Yahoo Finance",
+            "fecha_corte": "18/06/2026",
+        },
+        fecha_generacion=date(2026, 6, 21),
+    )
+
+    assert "Fuente de datos: Yahoo Finance" in texto
+    assert "Fecha de corte: 18/06/2026" in texto
+    assert "Fecha de generación: 21/06/2026" in texto
+
+
+def test_texto_trazabilidad_usa_valores_por_defecto():
+    texto = _texto_trazabilidad(
+        {},
+        fecha_generacion=date(2026, 6, 21),
+    )
+
+    assert "Fuente de datos: No especificada" in texto
+    assert "Fecha de corte: No disponible" in texto
+    assert "Fecha de generación: 21/06/2026" in texto
