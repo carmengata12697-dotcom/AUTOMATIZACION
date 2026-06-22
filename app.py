@@ -89,6 +89,17 @@ with st.sidebar:
                 def ultimo(serie):
                     s = serie.dropna()
                     return s.iloc[-1] if not s.empty else None
+                
+                def fecha_corte(df):
+                    if df is None or df.empty:
+                        return None
+
+                    ultima_fecha = df.index.max()
+                    return (
+                        ultima_fecha.strftime("%d/%m/%Y")
+                        if hasattr(ultima_fecha, "strftime")
+                        else str(ultima_fecha)
+                    )
 
                 datos_tickers = []
                 for ticker_pdf in tickers:
@@ -121,6 +132,8 @@ with st.sidebar:
                         "resultado_scoring": resultado,
                         "fundamental": fundamental,
                         "precios": precios,
+                        "fuente_datos": "Yahoo Finance",
+                        "fecha_corte": fecha_corte(precios),
                     })
 
                 pdf_bytes = generar_reporte(datos_tickers)

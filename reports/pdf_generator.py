@@ -239,7 +239,18 @@ def _grafica_scoring_png(desglose: list) -> bytes | None:
         traceback.print_exc()
         print(f"Error generando grafica scoring: {e}")
         return None
+    
+def _texto_trazabilidad(datos: dict, fecha_generacion: date | None = None) -> str:
+    """Construye el bloque auditable de fuente y fechas del reporte"""
+    fuente_datos = datos.get("fuente_datos") or "No especificada"
+    fecha_corte = datos.get("fecha_corte") or "No disponible"
+    fecha_generacion = fecha_generacion or date.today()
 
+    return (
+        f"Fuente de datos: {fuente_datos} | "
+        f"Fecha de corte: {fecha_corte}<br/>"
+        f"Fecha de generación: {fecha_generacion.strftime('%d/%m/%Y')}"
+    )
 
 # ------------------------------------------------------------------ #
 # Sección de un ticker dentro del PDF                                 #
@@ -267,7 +278,10 @@ def _seccion_ticker(datos: dict, estilos: dict) -> list:
         estilos["titulo_ticker"],
     ))
     elementos.append(Paragraph(
-        f"Sector: {sector} | Fecha: {date.today().strftime('%d/%m/%Y')}",
+        (
+            f"Sector: {sector} | Moneda: {moneda}<br/>"
+            f"{_texto_trazabilidad(datos)}"
+        ),
         estilos["subtitulo"],
     ))
     elementos.append(HRFlowable(width="100%", thickness=1,
