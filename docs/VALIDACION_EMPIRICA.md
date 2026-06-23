@@ -5,6 +5,8 @@
 > como el diagrama del flujo de decisión y el análisis de sensibilidad de los
 > pesos. Script reproducible: [`scripts/backtest.py`](scripts/backtest.py).
 > Pruebas asociadas: [`tests/test_sensibilidad_pesos.py`](tests/test_sensibilidad_pesos.py).
+>
+> **Autor:** Carlos Achiquez (GitHub: [`Carlos1310823`](https://github.com/Carlos1310823)).
 
 ## 1. Objetivo
 
