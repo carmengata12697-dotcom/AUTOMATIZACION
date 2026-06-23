@@ -4,6 +4,9 @@
 > [`carmengata12697-dotcom/AUTOMATIZACION`](https://github.com/carmengata12697-dotcom/AUTOMATIZACION).
 > Complementa al `README.md` (visión de usuario) y a `CLAUDE.md` (memoria de decisiones).
 > Proyecto académico — Máster en IA Aplicada a las Finanzas.
+>
+> **Autor de este documento:** Carlos Achiquez (GitHub: [`Carlos1310823`](https://github.com/Carlos1310823)).
+> Contribución: marco teórico, validación empírica del motor de scoring y referencias bibliográficas (APA 7).
 
 ---
 
