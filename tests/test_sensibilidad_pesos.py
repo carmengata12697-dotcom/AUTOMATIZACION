@@ -1,5 +1,7 @@
 """Pruebas del analisis de sensibilidad de los pesos del motor de scoring.
 
+Autor: Carlos Achiquez (GitHub: Carlos1310823).
+
 Complementan a test_scoring.py: alli se prueba el comportamiento con los pesos
 por defecto; aqui se ejercita el parametro `pesos` de calcular_score() y se
 comprueba que el RANKING entre valores es estable ante distintas ponderaciones
