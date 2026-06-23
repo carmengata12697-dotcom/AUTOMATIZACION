@@ -1,5 +1,7 @@
 """Validacion empirica del motor de scoring (backtesting + analisis de sensibilidad).
 
+Autor: Carlos Achiquez (GitHub: Carlos1310823).
+
 Este script ejercita el MOTOR DE SCORING REAL del proyecto
 (domain/scoring_engine.py) con los PESOS REALES (config.PESOS_SCORING) sobre un
 conjunto de valores reales, y comprueba la ROBUSTEZ del ranking ante distintas
